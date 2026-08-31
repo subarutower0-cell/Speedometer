@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <title>ドップラー速度計</title>
 <meta name="theme-color" content="#EDE9DF" media="(prefers-color-scheme: light)">
@@ -458,9 +461,14 @@ function onFix(pos){
   const nis   = innov/sigma;                // ズレ ÷ 想定されるズレの大きさ
   const need  = Math.abs(innov)/dt;         // そのズレを出すのに必要な加速度
 
-  /* 外れ値：物理的にあり得ず、かつ統計的にも驚くほど大きいときだけ弾く */
-  const outlier = need > S.mode.amax && Math.abs(nis) > 3;
-  if(outlier) R *= 1 + Math.pow(need/S.mode.amax, 3)*25;
+  /* 外れ値：物理的にあり得ず、かつ統計的にも驚くほど大きいときだけ弾く。
+     mode.amax をそのまま閾値にすると、新幹線のように amax が小さいモードでは
+     GPS 側の普通のノイズ（数 km/h のふらつき）まで「あり得ない加速度」として
+     弾いてしまい、観測値がほぼ全部無視されて速度が更新されなくなる。
+     ノイズで説明できる範囲（3 m/s² 程度）は最低ラインとして許容する。 */
+  const outlierAmax = Math.max(S.mode.amax, 3);
+  const outlier = need > outlierAmax && Math.abs(nis) > 3;
+  if(outlier) R *= 1 + Math.pow(need/outlierAmax, 3)*25;
 
   /* 想定内のズレなら雑音とみなして強く平滑化し、想定外なら本当に加減速していると
      判断して即座に追従へ切り替える（上がるのは一瞬、戻るのはゆっくり）。
